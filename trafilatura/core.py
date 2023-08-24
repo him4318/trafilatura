@@ -474,6 +474,9 @@ def handle_textelem(element, potential_tags, options):
         new_element = handle_table(element, potential_tags, options)
     elif element.tag == 'graphic' and 'graphic' in potential_tags:
         new_element = handle_image(element)
+    elif element.tag in ('h1', 'h2', 'h3', 'h4', 'h5', 'h6'):	
+        # print(element.text)	
+        new_element = element	      
     else:
         # other elements (div, ??, ??)
         new_element = handle_other_elements(element, potential_tags, options)
@@ -484,7 +487,7 @@ def recover_wild_text(tree, result_body, options, potential_tags=TAG_CATALOG):
     '''Look for all previously unconsidered wild elements, including outside of the determined
        frame and throughout the document to recover potentially missing text parts'''
     LOGGER.debug('Recovering wild text elements')
-    search_expr = './/blockquote|.//code|.//p|.//pre|.//q|.//quote|.//table|.//div[contains(@class, \'w3-code\')]'
+    search_expr = './/blockquote|.//code|.//p|.//pre|.//q|.//quote|.//table|.//div[contains(@class, \'w3-code\')]|.//h1|.//h2|.//h3|.//h4|.//h5|.//h6'
     if options.recall is True:
         potential_tags.update(['div', 'lb'])
         search_expr += '|.//div|.//lb|.//list'
