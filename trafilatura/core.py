@@ -466,8 +466,8 @@ def recover_wild_text(tree, result_body, options, potential_tags=TAG_CATALOG):
     LOGGER.debug('Recovering wild text elements')
     search_expr = './/blockquote|.//code|.//p|.//pre|.//q|.//quote|.//table|.//h1|.//h2|.//h3|.//h4|.//h5|.//h6'
     if options.recall is True:
-        potential_tags.update(['div', 'lb'])
-        search_expr += '|.//div|.//lb|.//list'
+        potential_tags.update(['div', 'lb','a'])
+        search_expr += '|.//div|.//lb|.//list|.//a'
     # prune
     search_tree = prune_unwanted_sections(tree, potential_tags, options)
     # decide if links are preserved
@@ -496,10 +496,12 @@ def prune_unwanted_sections(tree, potential_tags, options):
         tree = prune_unwanted_nodes(tree, TEASER_DISCARD_XPATH)
         if options.precision is True:
             tree = prune_unwanted_nodes(tree, PRECISION_DISCARD_XPATH)
-    # remove elements by link density
-    tree = delete_by_link_density(tree, 'div', backtracking=True, favor_precision=options.precision)
-    tree = delete_by_link_density(tree, 'list', backtracking=False, favor_precision=options.precision)
-    tree = delete_by_link_density(tree, 'p', backtracking=False, favor_precision=options.precision)
+
+    if options.recall is False:
+        # remove elements by link density
+        tree = delete_by_link_density(tree, 'div', backtracking=True, favor_precision=options.precision)
+        tree = delete_by_link_density(tree, 'list', backtracking=False, favor_precision=options.precision)
+        tree = delete_by_link_density(tree, 'p', backtracking=False, favor_precision=options.precision)
     # also filter fw/head, table and quote elements?
     if options.precision is True:
         # delete trailing titles
