@@ -7,16 +7,17 @@ Functions to process nodes in HTML code.
 ## under GNU GPL v3 license
 
 import logging
+
 from collections import defaultdict
 from copy import deepcopy
 
-from courlan.urlutils import fix_relative_urls, get_base_url
 from lxml.etree import strip_tags
 from lxml.html.clean import Cleaner
 
 from .filters import duplicate_test, textfilter
 from .settings import CUT_EMPTY_ELEMS, MANUALLY_CLEANED, MANUALLY_STRIPPED
 from .utils import trim, uniquify_list
+
 
 LOGGER = logging.getLogger(__name__)
 
@@ -218,7 +219,7 @@ def delete_by_link_density(subtree, tagname, backtracking=False, favor_precision
     return subtree
 
 
-def convert_tags(tree, options, url=None):
+def convert_tags(tree, options):
     '''Simplify markup and convert relevant HTML tags to an XML standard'''
     # delete links for faster processing
     if options.links is False:
@@ -232,17 +233,12 @@ def convert_tags(tree, options, url=None):
         # strip the rest
         strip_tags(tree, 'a')
     else:
-        # get base URL for converting relative URLs
-        base_url = url and get_base_url(url)
         for elem in tree.iter('a', 'ref'):
             elem.tag = 'ref'
             # replace href attribute and delete the rest
             target = elem.get('href') # defaults to None
             elem.attrib.clear()
             if target is not None:
-                # convert relative URLs
-                if base_url is not None:
-                    target = fix_relative_urls(base_url, target)
                 elem.set('target', target)
     # include_formatting
     if options.formatting is False:
@@ -289,10 +285,10 @@ def convert_tags(tree, options, url=None):
                 # convert elem tag
                 subelem.tag = 'item'
         # head tags + delete attributes
-        elif elem.tag in ('h1', 'h2', 'h3', 'h4', 'h5', 'h6'):
-            elem.attrib.clear()
-            elem.set('rend', elem.tag)
-            elem.tag = 'head'
+        # elif elem.tag in ('h1', 'h2', 'h3', 'h4', 'h5', 'h6'):
+        #     elem.attrib.clear()
+        #     elem.set('rend', elem.tag)
+        #     elem.tag = 'head'
         # br → lb
         elif elem.tag in ('br', 'hr'):
             elem.tag = 'lb'
