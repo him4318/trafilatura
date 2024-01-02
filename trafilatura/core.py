@@ -11,30 +11,35 @@ Module bundling all functions needed to extract the text in a webpage.
 import logging
 import re  # import regex as re
 import warnings
+
 from copy import deepcopy
+
+# SIGALRM isn't present on Windows, detect it
+try:
+    from signal import signal, alarm, SIGALRM
+    HAS_SIGNAL = True
+except ImportError:
+    HAS_SIGNAL = False
 
 from lxml.etree import Element, SubElement, strip_elements, strip_tags
 from lxml.html import tostring
 
 # own
-from .external import (SANITIZED_XPATH, justext_rescue, sanitize_tree,
-                       try_readability)
+from .external import justext_rescue, sanitize_tree, SANITIZED_XPATH, try_readability
 from .filters import (LANGID_FLAG, check_html_lang, duplicate_test,
                       language_filter, text_chars_test)
 from .hashing import content_fingerprint
-from .htmlprocessing import (convert_tags, delete_by_link_density,
-                             handle_textnode, link_density_test_tables,
-                             process_node, prune_unwanted_nodes, tree_cleaning)
-from .metadata import Document, extract_metadata
-from .settings import DEFAULT_CONFIG, TAG_CATALOG, use_config
+from .htmlprocessing import (convert_tags, handle_textnode, process_node,
+                             delete_by_link_density, link_density_test_tables,
+                             prune_unwanted_nodes, tree_cleaning)
+from .metadata import extract_metadata, Document
+from .settings import use_config, DEFAULT_CONFIG, TAG_CATALOG
 from .utils import is_image_file, load_html, normalize_unicode, trim, txttocsv
-from .xml import (build_json_output, build_tei_output, build_xml_output,
-                  control_xml_output, remove_empty_elements, strip_double_tags,
-                  xmltotxt)
-from .xpaths import (BODY_XPATH, COMMENTS_DISCARD_XPATH, COMMENTS_XPATH,
-                     DISCARD_IMAGE_ELEMENTS, OVERALL_DISCARD_XPATH,
-                     PAYWALL_DISCARD_XPATH, PRECISION_DISCARD_XPATH,
-                     REMOVE_COMMENTS_XPATH, TEASER_DISCARD_XPATH)
+from .xml import (build_json_output, build_xml_output, build_tei_output,
+                  control_xml_output, remove_empty_elements, strip_double_tags, xmltotxt)
+from .xpaths import (BODY_XPATH, COMMENTS_XPATH, COMMENTS_DISCARD_XPATH, OVERALL_DISCARD_XPATH,
+                     TEASER_DISCARD_XPATH, PAYWALL_DISCARD_XPATH, PRECISION_DISCARD_XPATH,
+                     DISCARD_IMAGE_ELEMENTS, REMOVE_COMMENTS_XPATH)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -208,34 +213,8 @@ def handle_lists(element, options):
     return None
 
 
-def get_code_block_element(element):
-    # GitHub
-    parent = element.getparent()
-    if parent is not None and 'highlight' in parent.get('class', default=''):
-        return element
-    # highlightjs
-    code = element.find('code')
-    if code is not None and len(element.getchildren()) == 1:
-        return code
-    return None
-
-
-def handle_code_blocks(element, code):
-    processed_element = Element('code')
-    for child in element.iter('*'):
-        if child.tag == 'lb':
-            child.text = '\n'
-        child.tag = 'done'
-    processed_element.text = ''.join(code.itertext())
-    return processed_element
-
-
 def handle_quotes(element, options):
     '''Process quotes elements'''
-    code = get_code_block_element(element)
-    if code is not None:
-        return handle_code_blocks(element, code)
-
     processed_element = Element(element.tag)
     for child in element.iter('*'):
         processed_child = process_node(child, options)  # handle_textnode(child, comments_fix=True)
@@ -252,9 +231,6 @@ def handle_quotes(element, options):
 
 def handle_other_elements(element, potential_tags, options):
     '''Handle diverse or unknown elements in the scope of relevant tags'''
-    # handle w3schools code
-    if element.tag == 'div' and 'w3-code' in element.get('class', default=''):
-        return handle_code_blocks(element, element)
     # delete unwanted
     if element.tag not in potential_tags:
         if element.tag != 'done':
@@ -453,6 +429,7 @@ def handle_image(element):
 def handle_textelem(element, potential_tags, options):
     '''Process text element and determine how to deal with its content'''
     new_element = None
+    # print(element.tag)
     # bypass: nested elements
     if element.tag == 'list':
         new_element = handle_lists(element, options)
@@ -474,9 +451,9 @@ def handle_textelem(element, potential_tags, options):
         new_element = handle_table(element, potential_tags, options)
     elif element.tag == 'graphic' and 'graphic' in potential_tags:
         new_element = handle_image(element)
-    elif element.tag in ('h1', 'h2', 'h3', 'h4', 'h5', 'h6'):	
-        # print(element.text)	
-        new_element = element	      
+    elif element.tag in ('h1', 'h2', 'h3', 'h4', 'h5', 'h6'):
+        # print(element.text)
+        new_element = element
     else:
         # other elements (div, ??, ??)
         new_element = handle_other_elements(element, potential_tags, options)
@@ -487,7 +464,7 @@ def recover_wild_text(tree, result_body, options, potential_tags=TAG_CATALOG):
     '''Look for all previously unconsidered wild elements, including outside of the determined
        frame and throughout the document to recover potentially missing text parts'''
     LOGGER.debug('Recovering wild text elements')
-    search_expr = './/blockquote|.//code|.//p|.//pre|.//q|.//quote|.//table|.//div[contains(@class, \'w3-code\')]|.//h1|.//h2|.//h3|.//h4|.//h5|.//h6'
+    search_expr = './/blockquote|.//code|.//p|.//pre|.//q|.//quote|.//table|.//h1|.//h2|.//h3|.//h4|.//h5|.//h6'
     if options.recall is True:
         potential_tags.update(['div', 'lb'])
         search_expr += '|.//div|.//lb|.//list'
@@ -498,6 +475,8 @@ def recover_wild_text(tree, result_body, options, potential_tags=TAG_CATALOG):
         strip_tags(search_tree, 'a', 'ref', 'span')
     else:
         strip_tags(search_tree, 'span')
+    # for h5 in search_tree.xpath('//h2'):
+    #     print(h5.text)
     subelems = search_tree.xpath(search_expr)
     result_body.extend(filter(lambda x: x is not None, (handle_textelem(e, potential_tags, options)
                        for e in subelems)))
@@ -787,12 +766,10 @@ def html2txt(content):
         content: HTML document as string or LXML element.
 
     Returns:
-        The extracted text in the form of a string or an empty string.
+        The extracted text in the form of a string.
 
     """
     tree = load_html(content)
-    if tree is None:
-        return ''
     return ' '.join(tree.text_content().split()).strip()
 
 
@@ -900,6 +877,7 @@ def bare_extraction(filecontent, url=None, no_fallback=False,  # fast=False,
     # load data
     try:
         tree = load_html(filecontent)
+        # print(tree.findall(["h1", "h2", "h3", "h4", "h5", "h6"]))
         if tree is None:
             LOGGER.error('empty HTML tree for URL %s', url)
             raise ValueError
@@ -940,9 +918,9 @@ def bare_extraction(filecontent, url=None, no_fallback=False,  # fast=False,
         # clean + use LXML cleaner
         cleaned_tree = tree_cleaning(tree, options)
         cleaned_tree_backup = deepcopy(cleaned_tree)
-
+        
         # convert tags, the rest does not work without conversion
-        cleaned_tree = convert_tags(cleaned_tree, options, url or document.url)
+        cleaned_tree = convert_tags(cleaned_tree, options)
 
         # comments first, then remove
         if include_comments is True:
@@ -951,10 +929,11 @@ def bare_extraction(filecontent, url=None, no_fallback=False,  # fast=False,
             commentsbody, temp_comments, len_comments = None, '', 0
         if favor_precision is True:
             cleaned_tree = prune_unwanted_nodes(cleaned_tree, REMOVE_COMMENTS_XPATH)
-
+        # for h5 in cleaned_tree.xpath('//h5'):
+        #     print(h5.text)
         # extract content
         postbody, temp_text, len_text = extract_content(cleaned_tree, options)
-
+       
         # compare if necessary
         if no_fallback is False:
             postbody, temp_text, len_text = compare_extraction(cleaned_tree_backup, tree_backup_1, url, postbody, temp_text, len_text, options)
@@ -1076,6 +1055,13 @@ def extract(filecontent, url=None, record_id=None, no_fallback=False,
     # configuration init
     config = use_config(settingsfile, config)
 
+    # put timeout signal in place
+    if HAS_SIGNAL is True:
+        timeout = config.getint('DEFAULT', 'EXTRACTION_TIMEOUT')
+        if timeout > 0:
+            signal(SIGALRM, timeout_handler)
+            alarm(timeout)
+
     # extraction
     try:
         document = bare_extraction(
@@ -1095,6 +1081,10 @@ def extract(filecontent, url=None, record_id=None, no_fallback=False,
     except RuntimeError:
         LOGGER.error('Processing timeout for %s', url)
         document = None
+
+    # deactivate alarm signal
+    if HAS_SIGNAL is True and timeout > 0:
+        alarm(0)
 
     # post-processing
     if document is None:
