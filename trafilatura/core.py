@@ -578,6 +578,8 @@ def extract_content(tree, options):
     temp_text = ' '.join(result_body.itertext()).strip()
     # try parsing wild <p> elements if nothing found or text too short
     # todo: test precision and recall settings here
+    result_body = Element('body')
+    temp_text = ""    
     if len(result_body) == 0 or len(temp_text) < options.config.getint('DEFAULT', 'MIN_EXTRACTED_SIZE'):
         result_body = recover_wild_text(backup_tree, result_body, options, potential_tags)
         temp_text = ' '.join(result_body.itertext()).strip()
