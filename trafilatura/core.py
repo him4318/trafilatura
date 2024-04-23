@@ -468,7 +468,8 @@ def recover_wild_text(tree, result_body, options, potential_tags=TAG_CATALOG):
         potential_tags.update(['div', 'lb','a'])
         search_expr += '|.//div|.//lb|.//list|.//a'
     # prune
-    search_tree = prune_unwanted_sections(tree, potential_tags, options)
+    # search_tree = prune_unwanted_sections(tree, potential_tags, options)
+    search_tree = tree
     # decide if links are preserved
     if 'ref' not in potential_tags:
         strip_tags(search_tree, 'a', 'ref', 'span')
