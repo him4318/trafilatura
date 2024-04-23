@@ -463,7 +463,7 @@ def recover_wild_text(tree, result_body, options, potential_tags=TAG_CATALOG):
     '''Look for all previously unconsidered wild elements, including outside of the determined
        frame and throughout the document to recover potentially missing text parts'''
     LOGGER.debug('Recovering wild text elements')
-    search_expr = './/blockquote|.//code|.//p|.//pre|.//q|.//quote|.//table|.//h1|.//h2|.//h3|.//h4|.//h5|.//h6'
+    search_expr = './/blockquote|.//code|.//p|.//pre|.//q|.//quote|.//table|.//h1|.//h2|.//h3|.//h4|.//h5|.//h6|.//button'
     if options.recall is True:
         potential_tags.update(['div', 'lb','a'])
         search_expr += '|.//div|.//lb|.//list|.//a'
